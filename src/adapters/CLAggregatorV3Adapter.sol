@@ -22,4 +22,5 @@ contract CLAggregatorV3Adapter is IYieldBearingToken {
         (, int256 answer,,,) = CL_AGGREGATOR.latestRoundData();
         conversionRate = uint256(answer);
     }
+    
 }

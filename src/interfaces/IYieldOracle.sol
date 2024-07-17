@@ -4,16 +4,20 @@ pragma solidity 0.8.21;
 import {AutomationCompatibleInterface} from "chainlink/src/v0.8/automation/AutomationCompatible.sol";
 import {IYieldBearingToken} from "./IYieldBearingToken.sol";
 
-/// @title IAverageYieldOracle
+/// @title IYieldOracle
 /// @author Khaled G. @ Allez Labs
 /// @custom:contact kh.grira@gmail.com
 /// @notice Interface for the average yield oracle
-interface IAverageYieldOracle is AutomationCompatibleInterface {
+interface IYieldOracle is AutomationCompatibleInterface {
     /// @notice Emitted when the average yield is updated
-    /// @param averageYield The new average yield
+    /// @param yield The new average yield
     /// @param conversionRate The new conversion rate of the yield bearing token
     /// @param timestamp The timestamp of the update
-    event AverageYieldUpdated(int averageYield, uint conversionRate, uint timestamp);
+    event YieldUpdated(int yield, uint conversionRate, uint timestamp);
+
+
+    /// @notice Returns the conversion rate stored at that index
+    function conversionRates(uint) external view returns(int);
 
     /// @notice Returns the yield bearing token or a wrapper contract that returns the exchange rates
     function YIELD_BEARING_TOKEN() external view returns (IYieldBearingToken);
@@ -34,7 +38,7 @@ interface IAverageYieldOracle is AutomationCompatibleInterface {
     function lastUpdateTimestamp() external view returns (uint);
 
     /// @notice Returns the current average yield
-    function averageYield() external view returns (int);
+    function yield() external view returns (int);
 
     /// @notice Returns the next update timestamp
     function nextUpdateTimestamp() external view returns (uint);
@@ -44,5 +48,8 @@ interface IAverageYieldOracle is AutomationCompatibleInterface {
 
     /// @notice Returns the last yield
     function lastYield() external view returns (int yield);
+
+    /// @notice Returns the description of the oracle
+    function description() external view returns(string memory);
 
 }

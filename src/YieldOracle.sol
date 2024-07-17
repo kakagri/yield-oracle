@@ -3,44 +3,48 @@ pragma solidity 0.8.21;
 
 import {IYieldBearingToken} from "./interfaces/IYieldBearingToken.sol";
 import {ErrorsLib} from "./libraries/ErrorsLib.sol";
-import {IAverageYieldOracle} from "./interfaces/IAverageYieldOracle.sol";
+import {IYieldOracle} from "./interfaces/IYieldOracle.sol";
 import {AutomationCompatibleInterface} from "chainlink/src/v0.8/automation/AutomationCompatible.sol";
 
-/// @title AverageYieldOracle
+/// @title YieldOracle
 /// @author Khaled G. @ Allez Labs
 /// @custom:contact kh.grira@gmail.com
 /// @notice This is a contract to compute average yield from on-chain conversion rates.
-contract AverageYieldOracle is IAverageYieldOracle {
+contract YieldOracle is IYieldOracle {
 
     /* Immutables */
 
-    /// @inheritdoc IAverageYieldOracle
+    /// @inheritdoc IYieldOracle
     IYieldBearingToken public immutable YIELD_BEARING_TOKEN;
 
-    /// @inheritdoc IAverageYieldOracle
+    /// @inheritdoc IYieldOracle
     uint public immutable INTERVAL; 
 
-    /// @inheritdoc IAverageYieldOracle
+    /// @inheritdoc IYieldOracle
     uint public immutable WINDOW;
     
-    /// @inheritdoc IAverageYieldOracle
+    /// @inheritdoc IYieldOracle
     uint public immutable CONVERSION_SAMPLE;
     
-    /// @inheritdoc IAverageYieldOracle
+    /// @inheritdoc IYieldOracle
     int public immutable SCALE_FACTOR; 
+
+    /// @inheritdoc IYieldOracle
+    string public description;
+
 
     /* Internal */
     
-    mapping(uint => int) internal _conversionRates;
+    mapping(uint => int) public conversionRates;
     uint internal counter;
 
     /* Public */
 
-    /// @inheritdoc IAverageYieldOracle
+    /// @inheritdoc IYieldOracle
     uint public lastUpdateTimestamp;
 
-    /// @inheritdoc IAverageYieldOracle
-    int public averageYield;
+    /// @inheritdoc IYieldOracle
+    int public yield;
 
     /* Constructor */
     /// @param _yieldBearingToken The yield bearing token or a wrapper contract that implements the IYieldBearingToken interface to report an exchange rate
@@ -53,19 +57,23 @@ contract AverageYieldOracle is IAverageYieldOracle {
         uint _interval,
         uint _window,
         uint _conversionSample,
-        int _scaleFactor
+        int _scaleFactor,
+        string memory _description
     ) {
         if (address(_yieldBearingToken) == address(0)) revert ErrorsLib.YieldBearingTokenIsZeroAddress();
         if (_interval == 0) revert ErrorsLib.IntervalIsZero();
         if (_window < 2) revert ErrorsLib.WindowIsTooSmall();
         if (_conversionSample == 0) revert ErrorsLib.ConversionSampleIsZero();
         if (_scaleFactor == 0) revert ErrorsLib.ScaleFactorIsZero();
+
+        for(uint k = 0; k < _window; k++) conversionRates[k] = 1;
         
         YIELD_BEARING_TOKEN = _yieldBearingToken;
         INTERVAL = _interval;
         WINDOW = _window;
         CONVERSION_SAMPLE = _conversionSample;
         SCALE_FACTOR = _scaleFactor;
+        description = _description;
     }
 
     /// @inheritdoc AutomationCompatibleInterface
@@ -90,36 +98,36 @@ contract AverageYieldOracle is IAverageYieldOracle {
         if (block.timestamp < lastUpdateTimestamp + INTERVAL) revert ErrorsLib.UpdateNotNeededYet(nextUpdateTimestamp());
 
         uint conversionRate = YIELD_BEARING_TOKEN.convertToAssets(CONVERSION_SAMPLE);
-        _conversionRates[counter] = int256(conversionRate);
+        conversionRates[counter] = int256(conversionRate);
         counter = (counter + 1) % WINDOW;
 
-        averageYield = _computeAverageYield();
+        yield = _computeYield();
         lastUpdateTimestamp = block.timestamp;
 
-        emit AverageYieldUpdated(averageYield, conversionRate, lastUpdateTimestamp);
+        emit YieldUpdated(yield, conversionRate, lastUpdateTimestamp);
     }
 
-    function _computeAverageYield() internal view returns(int256 yield) {
+    function _computeYield() internal view returns(int256 yield_) {
         for(uint k = 0; k < WINDOW - 2; k++) {
-            yield += (_conversionRates[(counter + k + 1) % WINDOW] - _conversionRates[(counter + k) % WINDOW]) * SCALE_FACTOR / _conversionRates[(counter + k) % WINDOW];
+            yield_ += (conversionRates[(counter + k + 1) % WINDOW] - conversionRates[(counter + k) % WINDOW]) * SCALE_FACTOR * 365.25 days / conversionRates[(counter + k) % WINDOW];
         }
-        yield = yield * 365 days / int256(INTERVAL * (WINDOW - 1));
+        yield_ = yield_  / int256(INTERVAL * (WINDOW - 1));
     }
 
-    /// @inheritdoc IAverageYieldOracle
+    /// @inheritdoc IYieldOracle
     function nextUpdateTimestamp() public view returns(uint) {
         return lastUpdateTimestamp + INTERVAL;
     }
 
-    /// @inheritdoc IAverageYieldOracle
+    /// @inheritdoc IYieldOracle
     function lastConversionRate() external view returns(int) {
-        return _conversionRates[(counter + WINDOW - 1) % WINDOW];
+        return conversionRates[(counter + WINDOW - 1) % WINDOW];
     }
 
-    /// @inheritdoc IAverageYieldOracle
-    function lastYield() external view returns(int yield) {
-        yield = (_conversionRates[(counter + WINDOW -1) % WINDOW] - _conversionRates[(counter + WINDOW - 2) % WINDOW]) * SCALE_FACTOR / _conversionRates[(counter + WINDOW - 2) % WINDOW];
-        yield = yield * 365 days / int256(INTERVAL);
+    /// @inheritdoc IYieldOracle
+    function lastYield() external view returns(int yield_) {
+        yield_ = (conversionRates[(counter + WINDOW -1) % WINDOW] - conversionRates[(counter + WINDOW - 2) % WINDOW]) * SCALE_FACTOR / conversionRates[(counter + WINDOW - 2) % WINDOW];
+        yield_ = yield_ * 365.25 days / int256(INTERVAL);
     }
 
 }
